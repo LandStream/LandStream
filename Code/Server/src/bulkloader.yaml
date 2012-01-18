@@ -21,7 +21,6 @@ python_preamble:
 - import: google.appengine.ext.db
 - import: google.appengine.api.datastore
 - import: google.appengine.api.users
-- import: transforms.transforms
 
 transformers:
 
@@ -31,160 +30,163 @@ transformers:
     columns: from_header
   property_map:
     - property: __key__
-      external_name: key
+      external_name: ID
       export_transform: transform.key_id_or_name_as_string
       import_transform: transform.create_foreign_key('OilGasLease', key_is_id=True)
 
     - property: activity
-      external_name: Activity
+      external_name: activity
       # Type: String Stats: 1 properties of this type in this kind.
 
-    - property: bookPage
-      external_name: BookPage
+    - property: book
+      external_name: book
       # Type: String Stats: 1 properties of this type in this kind.
+      
+    - property: page
+      external_name: page
 
     - property: cessationDays
-      external_name: CessationDays
+      external_name: cessationDays
       # Type: Integer Stats: 1 properties of this type in this kind.
       import_transform: transform.none_if_empty(int)
 
     - property: cessationOfProduction
-      external_name: CessationOfProduction
+      external_name: cessationOfProduction
       # Type: Boolean Stats: 1 properties of this type in this kind.
       import_transform: transform.regexp_bool('true', re.IGNORECASE)
 
     - property: companySource
-      external_name: CompanySource
+      external_name: companySource
       # Type: String Stats: 1 properties of this type in this kind.
 
     - property: county
-      external_name: County
+      external_name: county
       # Type: String Stats: 1 properties of this type in this kind.
 
     - property: depthClauseAdjustment
-      external_name: DepthClauseAdjustment
+      external_name: depthClauseAdjustment
       # Type: Integer Stats: 1 properties of this type in this kind.
       import_transform: transform.none_if_empty(int)
 
     - property: depthLimitation
-      external_name: DepthLimitation
+      external_name: depthLimitation
       # Type: Boolean Stats: 1 properties of this type in this kind.
       import_transform: transform.regexp_bool('true', re.IGNORECASE)
 
     - property: extensionMonths
-      external_name: ExtensionMonths
+      external_name: extensionMonths
       # Type: Integer Stats: 1 properties of this type in this kind.
       import_transform: transform.none_if_empty(int)
 
     - property: favoredNations
-      external_name: FavoredNations
+      external_name: favoredNations
       # Type: Boolean Stats: 1 properties of this type in this kind.
       import_transform: transform.regexp_bool('true', re.IGNORECASE)
 
     - property: grossProceeds
-      external_name: GrossProceeds
+      external_name: grossProceeds
       # Type: Boolean Stats: 1 properties of this type in this kind.
       import_transform: transform.regexp_bool('true', re.IGNORECASE)
 
     - property: instrumentType
-      external_name: InstrumentType
+      external_name: instrumentType
       # Type: String Stats: 1 properties of this type in this kind.
 
     - property: otherProvisions
-      external_name: OtherProvisions
+      external_name: otherProvisions
       # Type: Boolean Stats: 1 properties of this type in this kind.
       import_transform: transform.regexp_bool('true', re.IGNORECASE)
 
     - property: prefRightsDaysPastTerm
-      external_name: PrefRightsDaysPastTerm
+      external_name: prefRightsDaysPastTerm
       # Type: Integer Stats: 1 properties of this type in this kind.
       import_transform: transform.none_if_empty(int)
 
     - property: prefRights
-      external_name: PrefRights
+      external_name: prefRights
       # Type: Boolean Stats: 1 properties of this type in this kind.
       import_transform: transform.regexp_bool('true', re.IGNORECASE)
 
     - property: pughClause
-      external_name: PughClause
+      external_name: pughClause
       # Type: Boolean Stats: 1 properties of this type in this kind.
       import_transform: transform.regexp_bool('true', re.IGNORECASE)
 
     - property: shutInRoyaltiesMonths
-      external_name: ShutInRoyaltiesMonths
+      external_name: shutInRoyaltiesMonths
       # Type: Integer Stats: 1 properties of this type in this kind.
       import_transform: transform.none_if_empty(int)
 
     - property: shutInRoyalties
-      external_name: ShutInRoyalties
+      external_name: shutInRoyalties
       # Type: Boolean Stats: 1 properties of this type in this kind.
       import_transform: transform.regexp_bool('true', re.IGNORECASE)
 
     - property: subjectToPooling
-      external_name: SubjectToPooling
+      external_name: subjectToPooling
       # Type: Boolean Stats: 1 properties of this type in this kind.
       import_transform: transform.regexp_bool('true', re.IGNORECASE)
 
     - property: surfaceProvisions
-      external_name: SurfaceProvisions
+      external_name: surfaceProvisions
       # Type: Boolean Stats: 1 properties of this type in this kind.
       import_transform: transform.regexp_bool('true', re.IGNORECASE)
 
     - property: termOptionMonths
-      external_name: TermOptionMonths
+      external_name: termOptionMonths
       # Type: Integer Stats: 1 properties of this type in this kind.
       import_transform: transform.none_if_empty(int)
 
     - property:  parentOGL
-      external_name: ParentOilAndGasLease
+      external_name: parentOilAndGasLease
       export_transform: transform.key_id_or_name_as_string
       import_transform: transform.none_if_empty(transform.create_foreign_key('OilGasLease', key_is_id=True))
 
     - property: depthClauseType
-      external_name: DepthClauseType
+      external_name: depthClauseType
       
     - property: documentDate
-      external_name: DocumentDate
+      external_name: documentDate
       #export_transform: transform.export_date_time('%m/%d/%Y')
       #import_transform: transform.import_date_time('%m/%d/%Y')
       
     - property: effectiveDate
-      external_name: EffectiveDate
+      external_name: effectiveDate
       #export_transform: transform.export_date_time('%m/%d/%Y')
       #import_transform: transform.import_date_time('%m/%d/%Y')
       
     - property: extensionBonus
-      external_name: ExtensionBonus
-      import_transform: transform.none_if_empty(transforms.import_currency)
-      #import_transform: transform.none_if_empty(float)
+      external_name: extensionBonus
+      #import_transform: transform.none_if_empty(transforms.import_currency)
+      import_transform: transform.none_if_empty(float)
     
     - property: filingDate
-      external_name: FilingDate
-      export_transform: transform.export_date_time('%m/%d/%Y')
-      import_transform: transform.import_date_time('%m/%d/%Y')
+      external_name: filingDate
+      #export_transform: transform.export_date_time('%m/%d/%Y')
+      #import_transform: transform.import_date_time('%m/%d/%Y')
      
     - property: gross_ac
-      external_name: GrossAc
+      external_name: grossAc
       import_transform: transform.none_if_empty(float)
       
     - property: lessee
-      external_name: Lessee
+      external_name: lessee
      
     - property: lessor
-      external_name: Lessor
+      external_name: lessor
     
     - property: royalty
-      external_name: Royalty
+      external_name: royalty
       import_transform: transform.none_if_empty(float)
       
     - property: state
-      external_name: State
+      external_name: state
       
     - property: subjectToPoolingOrderNo
       external_name: SubjectToPoolingOrderNo
      
     - property: termMonths
-      external_name: TermMonths
+      external_name: termMonths
       import_transform: transform.none_if_empty(int)
      
     
@@ -195,36 +197,37 @@ transformers:
     columns: from_header
   property_map:
     - property: __key__
-      external_name: key
+      external_name: ID
+      import_transform: transform.create_foreign_key('Tract', key_is_id=True)
       export_transform: transform.key_id_or_name_as_string
 
     - property: oilGasLease
-      external_name: OilGasLease
+      external_name: oilGasLease
       # Type: Key Stats: 1 properties of this type in this kind.
       import_transform: transform.create_foreign_key('OilGasLease', key_is_id=True)
       export_transform: transform.key_id_or_name_as_string
         
     - property: rng
-      external_name: Rng
+      external_name: rng
       # Type: String Stats: 1 properties of this type in this kind.
 
     - property: sec
-      external_name: Sec
+      external_name: sec
       # Type: String Stats: 1 properties of this type in this kind.
 
     - property: twn
-      external_name: Twn
+      external_name: twn
       # Type: String Stats: 1 properties of this type in this kind.
 
     - property: county
-      external_name: County
+      external_name: county
      
     - property: legal
-      external_name: Legal
+      external_name: legal
     
     - property: meridian
-      external_name: Meridian
+      external_name: meridian
       
     - property: quarter
-      external_name: Quarter
+      external_name: quarter
       #import_transform: transform.none_if_empty(string)
