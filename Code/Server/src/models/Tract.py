@@ -1,5 +1,6 @@
 from google.appengine.ext import db
 from models.OilGasLease import OilGasLease
+from models.LandStreamModel import LandStreamModel
 
 # Validation methods
 # Note that validation methods that are used by properties in the Tract class must be
@@ -51,7 +52,7 @@ def validateRng(rng):
 
 # Tract class definition
 
-class Tract(db.Model):
+class Tract(LandStreamModel):
     oilGasLease = db.ReferenceProperty(OilGasLease)
     quarter = db.StringProperty(multiline=False, validator=validateQuarter)
     legal = db.StringProperty(multiline=True)

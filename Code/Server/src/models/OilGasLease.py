@@ -1,5 +1,5 @@
+from models.LandStreamModel import LandStreamModel
 from google.appengine.ext import db
-
 # The following choice lists are used for input restriction for certain properties of the OilGasLease
 # class.  At some point it may be beneficial to move these values into the datastore and use a lookup
 # instead, however this should work fine for the time being.
@@ -10,7 +10,7 @@ depthClauseChoices = ['Bore hole only','Deepest formation','Deepest producing fo
 
 # OilGasLease definition
 
-class OilGasLease(db.Model):
+class OilGasLease(LandStreamModel):
     
     # Basic lease info
     parentOGL = db.SelfReferenceProperty()
@@ -60,3 +60,6 @@ class OilGasLease(db.Model):
             return self.county + ', ' + self.book + '/' + self.page + ', ' + self.instrumentType
         except:
             return 'unset OilGasLease'
+    
+     
+        
