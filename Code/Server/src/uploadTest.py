@@ -11,18 +11,21 @@
 #
 
 from __future__ import with_statement
+from google.appengine.api import users
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import run_wsgi_app
 from google.appengine.api import files, images
 from google.appengine.ext import blobstore, deferred
 from google.appengine.ext.webapp import blobstore_handlers
 from google.appengine.ext import db
-import json, re, urllib, logging, zipfile, StringIO
+from django.utils import simplejson as json
+import re, urllib, logging, zipfile, StringIO
 
 from models.OilGasLease import OilGasLease
 from models.Tract import Tract
 
-WEBSITE = 'localhost:8081/'
+#WEBSITE = 'localhost:8081/'
+WEBSITE = 'http://wenzeltech-landstream.appspot.com/'
 MIN_FILE_SIZE = 1 # bytes
 MAX_FILE_SIZE = 5000000 # bytes
 IMAGE_TYPES = re.compile('image/(gif|p?jpeg|(x-)?png|bmp|pdf)')
@@ -120,7 +123,9 @@ class UploadHandler(webapp.RequestHandler):
         pass
     
     def get(self):
-        #self.redirect(WEBSITE)
+        if not users.get_current_user():
+            self.redirect(users.create_login_url("/"))
+            return
         logging.debug("GET")
         f = open( 'index.html' )
         self.response.out.write( f.read() )
@@ -146,7 +151,9 @@ class UploadHandler(webapp.RequestHandler):
 #class DownloadHandler(blobstore_handlers.BlobstoreDownloadHandler):
 class ImageDownloadHandler(webapp.RequestHandler):
     def get(self):
-                
+        if not users.get_current_user():
+            self.redirect(users.create_login_url("/"))
+            return        
         stream = StringIO.StringIO()
         zipFile = zipfile.ZipFile( stream, 'w' )
         
@@ -170,7 +177,9 @@ class ImageDownloadHandler(webapp.RequestHandler):
         
 class DataDownloadHandler(webapp.RequestHandler):
     def get(self):
-                
+        if not users.get_current_user():
+            self.redirect(users.create_login_url("/"))
+            return        
         stream = StringIO.StringIO()
         zipFile = zipfile.ZipFile( stream, 'w' )
         
