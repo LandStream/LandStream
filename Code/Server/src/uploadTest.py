@@ -159,9 +159,19 @@ class ImageDownloadHandler(webapp.RequestHandler):
         
         #get all the blobs in the blobstore and write them into the ZipFile
         all = blobstore.BlobInfo.all()
+        
+        filenameIndex = 0
         for blobInfo in all:
             logging.debug(blobInfo.filename)       
-            zipFile.writestr( blobInfo.filename, blobstore.BlobReader(blobInfo).read() )
+            #zipFile.writestr( "test" + str(filenameIndex), blobstore.BlobReader(blobInfo).read() )
+            try:
+                zipFile.writestr( blobInfo.filename, blobstore.BlobReader(blobInfo).read() )
+            except Exception:
+                self.response.headers['Content-Type'] = 'text/plain'
+                self.response.out.write( blobInfo.filename)
+                return
+
+            filenameIndex += 1
         zipFile.close()
         
         self.response.headers['Content-Type'] ='application/zip'
@@ -199,11 +209,9 @@ class DataDownloadHandler(webapp.RequestHandler):
         zipFile.writestr( "OilGasLease.csv", csvData )
         zipFile.close()
         
-    
         self.response.headers['Content-Type'] ='application/zip'
         self.response.headers['Content-Disposition'] = 'attachment; filename="data.zip"'
         
-
         stream.seek(0)
         while True:
             buf=stream.read(2048)
@@ -212,7 +220,24 @@ class DataDownloadHandler(webapp.RequestHandler):
             self.response.out.write(buf)
         stream.close()
         
-        
+class DataUploadHandler(webapp.RequestHandler):
+    def get(self):  
+        self.response.out.write('<html><body>')
+       
+        self.response.out.write("""
+                  <form action="/sign" enctype="multipart/form-data" method="post">
+                    <div><label>OilGasLease:</label></div>
+                    <div><input type="file" name="OilGasLease"/></div>
+                    <div><label>Tracts:</label></div>
+                    <div><input type="file" name="Tracts"/></div>
+                    <div><label>DocImage:</label></div>
+                    <div><input type="file" name="DocImage"/></div>
+                    <div><input type="submit" value="Upload .CSV Files" /></div>
+                  </form>
+                </body>
+              </html>""")    
+        #wtf
+    def post(self):
         
 #    
 #        
@@ -237,7 +262,8 @@ app = webapp.WSGIApplication(
         ('/', UploadHandler),
         #('/([^/]+)/([^/]+)', DownloadHandler)
         ('/download_images', ImageDownloadHandler),
-        ('/download_data', DataDownloadHandler)
+        ('/download_data', DataDownloadHandler),
+        ('/upload_data', DataUploadHandler)
     ],
     debug=True
 )
