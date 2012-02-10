@@ -221,11 +221,17 @@ class DataDownloadHandler(webapp.RequestHandler):
         stream.close()
         
 class DataUploadHandler(webapp.RequestHandler):
+    def get_file_size(self, file):
+        file.seek(0, 2) # Seek to the end of the file
+        size = file.tell() # Get the position of EOF
+        file.seek(0) # Reset the file position to the beginning
+        return size
+    
     def get(self):  
         self.response.out.write('<html><body>')
        
         self.response.out.write("""
-                  <form action="/sign" enctype="multipart/form-data" method="post">
+                  <form action="/upload_data" enctype="multipart/form-data" method="post">
                     <div><label>OilGasLease:</label></div>
                     <div><input type="file" name="OilGasLease"/></div>
                     <div><label>Tracts:</label></div>
@@ -238,7 +244,25 @@ class DataUploadHandler(webapp.RequestHandler):
               </html>""")    
         #wtf
     def post(self):
+        logging.debug("DataUploadHandler.post")
         
+        for name, fieldStorage in self.request.POST.items():
+            logging.debug( repr(type(fieldStorage)) )
+            if type(fieldStorage) is unicode:
+                continue
+            result = {}
+            result['type'] = fieldStorage.type
+            result['size'] = self.get_file_size(fieldStorage.file)
+            header = fieldStorage.file.readline()
+            
+            
+            #while fieldStorage.file:
+            #    logging.debug( fieldStorage.file.readline())
+                
+            logging.debug( name )
+            
+        
+    
 #    
 #        
 #        
