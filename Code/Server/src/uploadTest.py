@@ -244,22 +244,42 @@ class DataUploadHandler(webapp.RequestHandler):
               </html>""")    
         #wtf
     def post(self):
-        logging.debug("DataUploadHandler.post")
-        
+      
+#        logging.debug("DataUploadHandler.post")
+#        
+
         for name, fieldStorage in self.request.POST.items():
-            logging.debug( repr(type(fieldStorage)) )
+            
+#            logging.debug( repr(type(fieldStorage)) )
             if type(fieldStorage) is unicode:
                 continue
             result = {}
             result['type'] = fieldStorage.type
             result['size'] = self.get_file_size(fieldStorage.file)
-            header = fieldStorage.file.readline()
+            
+            if name == "OilGasLease":
+                if OilGasLease.ValidateCSVHeader(OilGasLease(), fieldStorage.file.readline()):
+                    print repr(OilGasLease.Headers)
+                    while 1:
+                        line = fieldStorage.file.readline()
+                        if not line:
+                            break
+                        lease = OilGasLease()
+                        lease.FromCSV(line)
+                
+                #lease = OilGasLease()
+                #print str(lease)
+                #lease.FromCSV(fieldStorage.file)
+#                logging.debug( str(lease))
+                #logging.debug( lease.lessee + " " + lease.lessor )
+            
+            #header = fieldStorage.file.readline()
             
             
             #while fieldStorage.file:
             #    logging.debug( fieldStorage.file.readline())
                 
-            logging.debug( name )
+            #logging.debug( name )
             
         
     
