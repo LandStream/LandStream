@@ -2,6 +2,22 @@ from google.appengine.ext import db
 
 import logging, re
 
+def ParseCSVLine( line ):
+    
+    values = list()
+    pattern = re.compile(r'(^|,)"(?P<value>.*?)"(,|$)')
+
+    result = re.search(pattern, line)
+    while result:
+        if result.start(0):
+            values.extend( line[:result.start(0)].split(',') )
+        values.append( result.group('value') )
+        line = line[result.end(0):]
+        result = re.search(pattern, line)
+    values.extend( line.split(',') )
+    
+    return values
+
 class LandStreamModel(db.Model):
     
     #def __init__(self):
@@ -104,13 +120,8 @@ class LandStreamModel(db.Model):
 #        return True
     
     def FromCSV(self, line):
-        
-        # "...", | ,"...", | ,"..."
-        values = re.split( r'(,|^)".*?"(,|$)', line)
-        print len(values), repr(values)
-        return False
-        
-        values = line.split(",")
+        print line, '\n'
+        values = ParseCSVLine( line )
         print repr(values), '\n'
         i = 0
         for val in values:
