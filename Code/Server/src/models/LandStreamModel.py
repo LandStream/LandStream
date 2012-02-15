@@ -1,6 +1,6 @@
 from google.appengine.ext import db
 
-import logging, re
+import logging, re, datetime, sys
 
 def ParseCSVLine( line ):
     
@@ -120,32 +120,48 @@ class LandStreamModel(db.Model):
 #        return True
     
     def FromCSV(self, line):
-        print line, '\n'
-        values = ParseCSVLine( line )
-        print repr(values), '\n'
+        #print line, '\n'
+        values = ParseCSVLine( line.strip() )
+        #print repr(values), '\n'
         i = 0
         for val in values:
-            print i
             if LandStreamModel.Headers[i] != "ID":
-                print LandStreamModel.Headers[i], val, type(getattr(self,LandStreamModel.Headers[i]))
-                setAttr(getattr(self,LandStreamModel.Headers[i]), val )
+                #print LandStreamModel.Headers[i], val, type(getattr(self,LandStreamModel.Headers[i]))
+                if not setAttr(self,LandStreamModel.Headers[i], val ):
+                    print "Line: ", line
             i += 1
-        print '\n'
+        #print '\n'
 
                 
-def setAttr( attr, val ):
+def setAttr( obj, name, val ):
     if val == "":
         val = None
-    try:
-        attr=val
-    except ValueError:
+    
+    if val == "TRUE":
+        setattr(obj, name, True)
+    elif val == "FALSE":
+        setattr(obj, name, False)
+    else:
         try:
-            attr=int(val)
-        except ValueError:
+            setattr(obj, name, val)
+        except:
             try:
-                attr=float(val)
+                setattr(obj, name, int(val))
             except:
-                return False
+                try:
+                    setattr(obj, name, float(val))
+                except:
+                    try:
+                        #print "date?", val.strip()
+                        temp = datetime.datetime.strptime( val, "%m/%d/%Y")
+                        d = datetime.date(temp.year, temp.month, temp.day)
+                        setattr(obj, name, d)
+                        #raise
+                    except Exception as detail:
+                        print "Error: ", sys.exc_info()[0]
+                        print "Detail: ", detail
+                        
+                        return False
     return True
                 
                 

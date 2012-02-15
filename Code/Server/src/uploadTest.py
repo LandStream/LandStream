@@ -19,7 +19,7 @@ from google.appengine.ext import blobstore, deferred
 from google.appengine.ext.webapp import blobstore_handlers
 from google.appengine.ext import db
 from django.utils import simplejson as json
-import re, urllib, logging, zipfile, StringIO
+import re, urllib, logging, zipfile, StringIO, sys
 
 from models.OilGasLease import OilGasLease
 from models.Tract import Tract
@@ -204,7 +204,7 @@ class DataDownloadHandler(webapp.RequestHandler):
             
             for lease in leases:
                 csvData += '\n' + lease.ToCSV()
-           
+
         logging.debug( csvData )     
         zipFile.writestr( "OilGasLease.csv", csvData )
         zipFile.close()
@@ -247,7 +247,6 @@ class DataUploadHandler(webapp.RequestHandler):
       
 #        logging.debug("DataUploadHandler.post")
 #        
-
         for name, fieldStorage in self.request.POST.items():
             
 #            logging.debug( repr(type(fieldStorage)) )
@@ -265,41 +264,14 @@ class DataUploadHandler(webapp.RequestHandler):
                         if not line:
                             break
                         lease = OilGasLease()
-                        lease.FromCSV(line)
-                
-                #lease = OilGasLease()
-                #print str(lease)
-                #lease.FromCSV(fieldStorage.file)
-#                logging.debug( str(lease))
-                #logging.debug( lease.lessee + " " + lease.lessor )
-            
-            #header = fieldStorage.file.readline()
-            
-            
-            #while fieldStorage.file:
-            #    logging.debug( fieldStorage.file.readline())
-                
-            #logging.debug( name )
-            
-        
-    
-#    
-#        
-#        
-       
-            
-            
-#        self.send_blob(blobInfo.key(), save_as=blob.filename)
-        
-        
-        
-#        if not blobstore.get(key):
-#            self.error(404)
-#        else:
-#            # Cache for the expiration time:
-#            self.response.headers['Cache-Control'] =\
-#                'public,max-age=%d' % EXPIRATION_TIME
-#            self.send_blob(key, save_as=filename)
+                        try:
+                            lease.FromCSV(line)
+                        except:
+                            print "Unable to create a OilGasLease from: ", line, " Error: ", sys.exc_info()[0]
+                        else:
+                            print str(lease)
+                            lease.put()
+
 
 app = webapp.WSGIApplication(
     [
