@@ -4,6 +4,7 @@ import logging, re, datetime, sys
 
 def ParseCSVLine( line ):
     
+    line = line.strip()
     values = list()
     pattern = re.compile(r'(^|,)"(?P<value>.*?)"(,|$)')
 
@@ -30,10 +31,12 @@ class LandStreamModel(db.Model):
         dictionary = instance.to_dict()
 
         headers = list()
-        header = header.strip().split(',')
+        #header = header.strip().split(',')
+        header = ParseCSVLine( header )
            
         i = 0
         for token in header:
+            print token
             headers.append(token)
             
             if token != "ID" and not dictionary.has_key(token):
@@ -78,7 +81,7 @@ class LandStreamModel(db.Model):
             headers.append(token)
             
             if token != "ID" and not dictionary.has_key(token):
-                print ("NOT VALID -- dictionary doesn't have: ", token)
+                print "NOT VALID -- dictionary doesn't have: ", token
                 return None
             i += 1
  

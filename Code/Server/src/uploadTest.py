@@ -24,104 +24,133 @@ import re, urllib, logging, zipfile, StringIO, sys
 from models.OilGasLease import OilGasLease
 from models.Tract import Tract
 
-#WEBSITE = 'localhost:8081/'
-WEBSITE = 'http://wenzeltech-landstream.appspot.com/'
-MIN_FILE_SIZE = 1 # bytes
-MAX_FILE_SIZE = 5000000 # bytes
-IMAGE_TYPES = re.compile('image/(gif|p?jpeg|(x-)?png|bmp|pdf)')
-ACCEPT_FILE_TYPES = IMAGE_TYPES
-THUMBNAIL_MODIFICATOR = '=s80' # max width / height
-EXPIRATION_TIME = 300 # seconds
+##WEBSITE = 'localhost:8081/'
+#WEBSITE = 'http://wenzeltech-landstream.appspot.com/'
+#MIN_FILE_SIZE = 1 # bytes
+#MAX_FILE_SIZE = 5000000 # bytes
+#IMAGE_TYPES = re.compile('image/(gif|p?jpeg|(x-)?png|bmp|pdf)')
+#ACCEPT_FILE_TYPES = IMAGE_TYPES
+#THUMBNAIL_MODIFICATOR = '=s80' # max width / height
+#EXPIRATION_TIME = 300 # seconds
+#
+#def cleanup(blob_keys):
+#    blobstore.delete(blob_keys)
+#
+#class UploadHandler(webapp.RequestHandler):
+#
+#    def initialize(self, request, response):
+#        logging.info("initialize")
+#        super(UploadHandler, self).initialize(request, response)
+#        self.response.headers['Access-Control-Allow-Origin'] = '*'
+#        self.response.headers[
+#            'Access-Control-Allow-Methods'
+#        ] = 'OPTIONS, HEAD, GET, POST, PUT, DELETE'
+#    
+#    def validate(self, file):
+#        if file['size'] < MIN_FILE_SIZE:
+#            file['error'] = 'minFileSize'
+#        elif file['size'] > MAX_FILE_SIZE:
+#            file['error'] = 'maxFileSize'
+#        elif not ACCEPT_FILE_TYPES.match(file['type']):
+#            file['error'] = 'acceptFileTypes'
+#        else:
+#            return True
+#        return False
+#    
+#    def get_file_size(self, file):
+#        file.seek(0, 2) # Seek to the end of the file
+#        size = file.tell() # Get the position of EOF
+#        file.seek(0) # Reset the file position to the beginning
+#        return size
+#    
+#    def write_blob(self, fieldStorage, info):
+#        logging.debug("write_blob")
+#        blob = files.blobstore.create(
+#            mime_type=info['type'],
+#            _blobinfo_uploaded_filename=info['name']
+#        )
+#        with files.open(blob, 'a') as f:
+#            fieldStorage.value = fieldStorage.file.read(65536)
+#            while fieldStorage.value:
+#                f.write(fieldStorage.value)
+#                fieldStorage.value = fieldStorage.file.read(65536)
+#        files.finalize(blob)
+#        return files.blobstore.get_blob_key(blob)
+#    
+#    def handle_upload(self):
+#        logging.debug("handle_upload")
+#        results = []
+#        blob_keys = []
+#        for name, fieldStorage in self.request.POST.items():
+#            if type(fieldStorage) is unicode:
+#                continue
+#            result = {}
+#            result['name'] = re.sub(r'^.*\\', '',
+#                fieldStorage.filename)
+#            result['type'] = fieldStorage.type
+#            result['size'] = self.get_file_size(fieldStorage.file)
+#            if self.validate(result):
+#                blob_key = str(
+#                    self.write_blob(fieldStorage, result)
+#                )
+#                blob_keys.append(blob_key)
+#                result['delete_type'] = 'DELETE'
+#                result['delete_url'] = self.request.host_url +\
+#                    '/?key=' + urllib.quote(blob_key, '')
+#                if (IMAGE_TYPES.match(result['type'])):
+#                    try:
+#                        result['url'] = images.get_serving_url(blob_key)
+#                        result['thumbnail_url'] = result['url'] +\
+#                            THUMBNAIL_MODIFICATOR
+#                    except: # Could not get an image serving url
+#                        pass
+#                if not 'url' in result:
+#                    result['url'] = self.request.host_url +\
+#                        '/' + blob_key + '/' + urllib.quote(
+#                            result['name'].encode('utf-8'), '')
+#            results.append(result)
+#        deferred.defer(
+#            cleanup,
+#            blob_keys,
+#            _countdown=EXPIRATION_TIME
+#        )
+#        return results
+#    
+#    def options(self):
+#        pass
+#        
+#    def head(self):
+#        pass
+#    
+#    def get(self):
+#        if not users.get_current_user():
+#            self.redirect(users.create_login_url("/"))
+#            return
+#        logging.debug("GET")
+#        f = open( 'index.html' )
+#        self.response.out.write( f.read() )
+#    
+#    def post(self):
+#        logging.debug("POST")
+#        if (self.request.get('_method') == 'DELETE'):
+#            return self.delete()
+#        s = json.dumps(self.handle_upload(), separators=(',',':'))
+#        redirect = self.request.get('redirect')
+#        if redirect:
+#            return self.redirect(str(
+#                redirect.replace('%s', urllib.quote(s, ''), 1)
+#            ))
+#        if 'application/json' in self.request.headers.get('Accept'):
+#            self.response.headers['Content-Type'] = 'application/json'
+#        self.response.out.write(s)
+#
+#    def delete(self):
+#        logging.debug("DELETE")
+#        blobstore.delete(self.request.get('key') or '')
 
-def cleanup(blob_keys):
-    blobstore.delete(blob_keys)
+
 
 class UploadHandler(webapp.RequestHandler):
-
-    def initialize(self, request, response):
-        logging.info("initialize")
-        super(UploadHandler, self).initialize(request, response)
-        self.response.headers['Access-Control-Allow-Origin'] = '*'
-        self.response.headers[
-            'Access-Control-Allow-Methods'
-        ] = 'OPTIONS, HEAD, GET, POST, PUT, DELETE'
-    
-    def validate(self, file):
-        if file['size'] < MIN_FILE_SIZE:
-            file['error'] = 'minFileSize'
-        elif file['size'] > MAX_FILE_SIZE:
-            file['error'] = 'maxFileSize'
-        elif not ACCEPT_FILE_TYPES.match(file['type']):
-            file['error'] = 'acceptFileTypes'
-        else:
-            return True
-        return False
-    
-    def get_file_size(self, file):
-        file.seek(0, 2) # Seek to the end of the file
-        size = file.tell() # Get the position of EOF
-        file.seek(0) # Reset the file position to the beginning
-        return size
-    
-    def write_blob(self, fieldStorage, info):
-        logging.debug("write_blob")
-        blob = files.blobstore.create(
-            mime_type=info['type'],
-            _blobinfo_uploaded_filename=info['name']
-        )
-        with files.open(blob, 'a') as f:
-            fieldStorage.value = fieldStorage.file.read(65536)
-            while fieldStorage.value:
-                f.write(fieldStorage.value)
-                fieldStorage.value = fieldStorage.file.read(65536)
-        files.finalize(blob)
-        return files.blobstore.get_blob_key(blob)
-    
-    def handle_upload(self):
-        logging.debug("handle_upload")
-        results = []
-        blob_keys = []
-        for name, fieldStorage in self.request.POST.items():
-            if type(fieldStorage) is unicode:
-                continue
-            result = {}
-            result['name'] = re.sub(r'^.*\\', '',
-                fieldStorage.filename)
-            result['type'] = fieldStorage.type
-            result['size'] = self.get_file_size(fieldStorage.file)
-            if self.validate(result):
-                blob_key = str(
-                    self.write_blob(fieldStorage, result)
-                )
-                blob_keys.append(blob_key)
-                result['delete_type'] = 'DELETE'
-                result['delete_url'] = self.request.host_url +\
-                    '/?key=' + urllib.quote(blob_key, '')
-                if (IMAGE_TYPES.match(result['type'])):
-                    try:
-                        result['url'] = images.get_serving_url(blob_key)
-                        result['thumbnail_url'] = result['url'] +\
-                            THUMBNAIL_MODIFICATOR
-                    except: # Could not get an image serving url
-                        pass
-                if not 'url' in result:
-                    result['url'] = self.request.host_url +\
-                        '/' + blob_key + '/' + urllib.quote(
-                            result['name'].encode('utf-8'), '')
-            results.append(result)
-        deferred.defer(
-            cleanup,
-            blob_keys,
-            _countdown=EXPIRATION_TIME
-        )
-        return results
-    
-    def options(self):
-        pass
-        
-    def head(self):
-        pass
-    
     def get(self):
         if not users.get_current_user():
             self.redirect(users.create_login_url("/"))
@@ -132,22 +161,18 @@ class UploadHandler(webapp.RequestHandler):
     
     def post(self):
         logging.debug("POST")
-        if (self.request.get('_method') == 'DELETE'):
-            return self.delete()
-        s = json.dumps(self.handle_upload(), separators=(',',':'))
-        redirect = self.request.get('redirect')
-        if redirect:
-            return self.redirect(str(
-                redirect.replace('%s', urllib.quote(s, ''), 1)
-            ))
-        if 'application/json' in self.request.headers.get('Accept'):
-            self.response.headers['Content-Type'] = 'application/json'
-        self.response.out.write(s)
-
-    def delete(self):
-        logging.debug("DELETE")
-        blobstore.delete(self.request.get('key') or '')
-
+        st = self.request.get('st')
+        co = self.request.get('co')
+        yr = self.request.get('yr')
+        id = self.request.get('id')
+        og = self.request.get('og')
+        
+        #if not st or not co or not yr or not id or not og:
+        #    self.
+        
+    
+        
+        
 #class DownloadHandler(blobstore_handlers.BlobstoreDownloadHandler):
 class ImageDownloadHandler(webapp.RequestHandler):
     def get(self):
@@ -241,26 +266,31 @@ class DataUploadHandler(webapp.RequestHandler):
                     <div><input type="submit" value="Upload .CSV Files" /></div>
                   </form>
                 </body>
-              </html>""")    
-        #wtf
+              </html>""")
+    
     def post(self):
-      
-#        logging.debug("DataUploadHandler.post")
-#        
-        for name, fieldStorage in self.request.POST.items():
-            
-#            logging.debug( repr(type(fieldStorage)) )
-            if type(fieldStorage) is unicode:
-                continue
-            result = {}
-            result['type'] = fieldStorage.type
-            result['size'] = self.get_file_size(fieldStorage.file)
-            
-            if name == "OilGasLease":
-                if OilGasLease.ValidateCSVHeader(OilGasLease(), fieldStorage.file.readline()):
+        
+        
+        data = None
+        #there must be a better way??
+        for name, value in self.request.POST.items():
+            print name
+            if name == 'data':
+                print 'we have data'
+                data = value       
+        
+        method = self.request.get('method')
+        if method == 'set_header':
+            logging.debug( dir(self.request.POST) )
+            logging.debug( self.request.get('data'))
+        elif method == 'load_csv':
+            logging.debug('LOAD CSV FILE')
+            print 'data: ', repr(data)
+            if data != None:
+                if OilGasLease.ValidateCSVHeader(OilGasLease(), data.file.readline()):
                     print repr(OilGasLease.Headers)
                     while 1:
-                        line = fieldStorage.file.readline()
+                        line = data.file.readline()
                         if not line:
                             break
                         lease = OilGasLease()
@@ -271,6 +301,67 @@ class DataUploadHandler(webapp.RequestHandler):
                         else:
                             print str(lease)
                             lease.put()
+                
+            #print dir(data)
+            #self.get_file_size( data.FieldStorage.file )
+                #logging.debug( type(value) )
+            #logging.debug( 'FILE SIZE: ' + self.get_file_size(self.request.get('data').file) )
+        
+        
+#        logging.debug("DataUploadHandler.post")
+#        
+        
+#class DataUploadHandler(webapp.RequestHandler):
+#    def get_file_size(self, file):
+#        file.seek(0, 2) # Seek to the end of the file
+#        size = file.tell() # Get the position of EOF
+#        file.seek(0) # Reset the file position to the beginning
+#        return size
+#    
+#    def get(self):  
+#        self.response.out.write('<html><body>')
+#       
+#        self.response.out.write("""
+#                  <form action="/upload_data" enctype="multipart/form-data" method="post">
+#                    <div><label>OilGasLease:</label></div>
+#                    <div><input type="file" name="OilGasLease"/></div>
+#                    <div><label>Tracts:</label></div>
+#                    <div><input type="file" name="Tracts"/></div>
+#                    <div><label>DocImage:</label></div>
+#                    <div><input type="file" name="DocImage"/></div>
+#                    <div><input type="submit" value="Upload .CSV Files" /></div>
+#                  </form>
+#                </body>
+#              </html>""")    
+#        #wtf
+#    def post(self):
+#      
+##        logging.debug("DataUploadHandler.post")
+##        
+#        for name, fieldStorage in self.request.POST.items():
+#            
+##            logging.debug( repr(type(fieldStorage)) )
+#            if type(fieldStorage) is unicode:
+#                continue
+#            result = {}
+#            result['type'] = fieldStorage.type
+#            result['size'] = self.get_file_size(fieldStorage.file)
+#            
+#            if name == "OilGasLease":
+#                if OilGasLease.ValidateCSVHeader(OilGasLease(), fieldStorage.file.readline()):
+#                    print repr(OilGasLease.Headers)
+#                    while 1:
+#                        line = fieldStorage.file.readline()
+#                        if not line:
+#                            break
+#                        lease = OilGasLease()
+#                        try:
+#                            lease.FromCSV(line)
+#                        except:
+#                            print "Unable to create a OilGasLease from: ", line, " Error: ", sys.exc_info()[0]
+#                        else:
+#                            print str(lease)
+#                            lease.put()
 
 
 app = webapp.WSGIApplication(

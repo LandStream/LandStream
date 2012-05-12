@@ -10,10 +10,27 @@ depthClauseChoices = ['Bore hole only','Deepest formation','Deepest producing fo
 
 # OilGasLease definition
 
+def FromCSV( csvFile ):
+    if OilGasLease.ValidateCSVHeader(OilGasLease(), csvFile.readline()):
+        print repr(OilGasLease.Headers)
+        while 1:
+            line = csvFile.readline()
+            if not line:
+                break
+            lease = OilGasLease()
+            try:
+                lease.FromCSV(line)
+            except:
+                print "Unable to create a OilGasLease from: ", line, " Error: ", sys.exc_info()[0]
+            else:
+                print str(lease)
+                lease.put()
+    
 class OilGasLease(LandStreamModel):
     
     # Basic lease info
     parentOGL = db.SelfReferenceProperty()
+    instrumentID   = db.StringProperty(multiline=False)
     instrumentType = db.StringProperty(default='Lease', multiline=False, choices=instrumentTypeChoices)
     activity = db.StringProperty(default='Unknown', multiline=False, choices=activityChoices)
     state = db.StringProperty(multiline=False)
@@ -22,6 +39,8 @@ class OilGasLease(LandStreamModel):
     page = db.StringProperty(default='', multiline=False)
     lessor = db.StringProperty(multiline=True)
     lessee = db.StringProperty(multiline=True)
+    filePath = db.StringProperty(default='', multiline=False)
+    fileName = db.StringProperty(default='', multiline=False)
     
     # Gross acres are stored here, but all other tract info is in separate entity
     gross_ac = db.FloatProperty()
