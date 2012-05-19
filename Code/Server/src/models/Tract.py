@@ -1,6 +1,6 @@
 from google.appengine.ext import db
 from models.OilGasLease import OilGasLease
-from models.LandStreamModel import LandStreamModel
+from models.LandStreamModel import CSVLandStreamModel
 
 # Validation methods
 # Note that validation methods that are used by properties in the Tract class must be
@@ -11,8 +11,9 @@ def validateQuarter(quarter):
         return
     allowed = ['NE', 'NW', 'SE', 'SW']
     for s in str(quarter).upper().split(','):
+        s = s.strip()
         if (not s in allowed):
-            raise db.BadValueError('quarter must be a comma separated list of the following: {NE|NW|SE|SW}')
+            raise db.BadValueError('quarter must be a comma separated list of the following: {NE|NW|SE|SW}:' + s)
 
 def validateSec(sec):
     if (sec == None):
@@ -52,8 +53,8 @@ def validateRng(rng):
 
 # Tract class definition
 
-class Tract(LandStreamModel):
-    oilGasLease = db.ReferenceProperty(OilGasLease)
+class Tract(CSVLandStreamModel):
+    oilGasLease = db.ReferenceProperty(OilGasLease, collection_name="Tracts")
     quarter = db.StringProperty(multiline=False, validator=validateQuarter)
     legal = db.StringProperty(multiline=True)
     sec = db.StringProperty(multiline=False, validator=validateSec)

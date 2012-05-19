@@ -1,177 +1,245 @@
 from google.appengine.ext import db
 
-import logging, re, datetime, sys
+import logging, re, datetime, sys, csv, StringIO
+from django.utils import simplejson as json
 
-def ParseCSVLine( line ):
+class InvalidCSVFileError(Exception):       
+    def __str__(self):
+        return "CSV file header is invalid"
     
-    line = line.strip()
-    values = list()
-    pattern = re.compile(r'(^|,)"(?P<value>.*?)"(,|$)')
-
-    result = re.search(pattern, line)
-    while result:
-        if result.start(0):
-            values.extend( line[:result.start(0)].split(',') )
-        values.append( result.group('value') )
-        line = line[result.end(0):]
-        result = re.search(pattern, line)
-    values.extend( line.split(',') )
+class InvalidJSONError(Exception):
+    def __init__(self, cls, json):
+        self.cls = cls
+        self.json = json
+    def __str__(self):
+        return "Trying to load an object of type %s from invalid JSON: %s" % (self.cls, self.json)
     
-    return values
+     
 
 class LandStreamModel(db.Model):
     
-    #def __init__(self):
-        #self.Headers = list()
+    date  = db.DateTimeProperty(auto_now_add=True)
+    
+    @classmethod
+    def to_dict(cls):
+        return dict([(p, unicode(getattr(cls, p))) for p in cls.properties()])
+     
+    def GetPropertyTypeInstance(self, propName):
+        for name, property in self.properties().items():
+            if name==propName:
+                return property
+        return None
+    
+    def GetType(self, propName):
+        t = self.GetPropertyTypeInstance(propName)
+        return LandStreamModel.__DB_PROPERTY_INFO[type(t)]
+
+    __DB_PROPERTY_INFO = {
+
+        db.StringProperty           :"String",
+        db.ByteStringProperty       :"ByteString",
+        db.BooleanProperty          :"Boolean",
+        db.IntegerProperty          :"Integer",
+        db.FloatProperty            :"Float",
+        db.DateTimeProperty         :"DateTime",
+        db.DateProperty             :"Date",
+        db.TimeProperty             :"Time",
+        db.ListProperty             :"List",
+        db.StringListProperty       :"StringList",
+        db.ReferenceProperty        :"Reference",
+        db.SelfReferenceProperty    :"SelfReference",
+        db.UserProperty             :"User",
+        db.BlobProperty             :"Blob",
+        db.TextProperty             :"Text",
+        db.CategoryProperty         :"Category",
+        db.LinkProperty             :"Link",
+        db.EmailProperty            :"Email",
+        db.GeoPtProperty            :"GeoPt",
+        db.IMProperty               :"IM",
+        db.PhoneNumberProperty      :"PhoneNumber",
+        db.PostalAddressProperty    :"PostalAddress",
+        db.RatingProperty           :"Rating"
+    }
+
+class CSVLandStreamModel(LandStreamModel):
+    
         
     Headers = None
     
-    @staticmethod
-    def ValidateCSVHeader(instance, header):
-        dictionary = instance.to_dict()
-
-        headers = list()
-        #header = header.strip().split(',')
-        header = ParseCSVLine( header )
+    @classmethod
+    def ValidCSVFile(cls, file):
            
-        i = 0
-        for token in header:
-            print token
-            headers.append(token)
-            
-            if token != "ID" and not dictionary.has_key(token):
-                print ("NOT VALID -- dictionary doesn't have: ", token)
-                return False
-            i += 1
+        for row in csv.reader([file.readline()]):
+            header = set(row)
+            break
         
-        LandStreamModel.Headers = headers
-        return True
-       
-  
-    def to_dict(self):
+        file.seek(0)
+        
+        header.remove('ID')
+        
+        dictionary = cls.to_dict()
+        
+        return len(header.difference(set(dictionary))) == 0
+           
+    @classmethod
+    def FromCSVFile(cls, file):
+        
+        items = list()
+        
+        if cls.ValidCSVFile(file):
+            reader = csv.DictReader( file )
+        else:
+            raise InvalidCSVFileError()
+            
+        for row in reader:
+            
+            try:
+                newItem = cls( key_name=row['ID'] )
+                del row['ID']
+                
+                for key, value in row.items():
+                    newItem.setAttr( key, value )
+                items.append(newItem)
+            except:
+                print row
+                raise
+        return items           
+    
+    def toDict(self):
         return dict([(p, unicode(getattr(self, p))) for p in self.properties()])
     
-    def CSVHeader(self):
-        dictionary = self.to_dict()
-        header = 'ID,'
-        for key in dictionary:
-            header += key + ','
-        return header
-        
-        
-    def ToCSV(self):
-        dictionary = self.to_dict()
-        
-        csv = str(self.key().id()) + ','
-        for key in dictionary:
-            csv += str(dictionary[key]) + ','   
-        return csv         
     
-    def ValidateCSVHeader1(self, header):
-        dictionary = self.to_dict()
-
-        headers = list()
-        header = header.strip().split(',')
+    @classmethod
+    def FromJSON(cls, jsonObj):
         
-        #logging.debug ("keys: ",repr(dictionary.keys()))
-        #logging.debug ("header: ", repr(header))
+        jsonDict = json.loads( jsonObj )
+        classDict = cls.to_dict()
         
-        i = 0
-        for token in header:
-            headers.append(token)
-            
-            if token != "ID" and not dictionary.has_key(token):
-                print "NOT VALID -- dictionary doesn't have: ", token
-                return None
-            i += 1
- 
-        #self.Headers = headers
-        return headers
-    
-    #instance is just a hax...hopefully there is a better way to do this in python
-    #@staticmethod
-#    def FromCSV(instance, csvFile):
-#        if LandStreamModel.ValidateCSVHeader(instance, csvFile.readline()):
-#            while 1:
-#                line = csvFile.readline()
-#                if not line:
-#                    break
-                
+        jsonSet = set(jsonDict)
+        jsonSet.remove('ID')
+        diff = jsonSet.difference(set(classDict))
+        if len(diff) > 0:
+            raise InvalidJSONError(cls, jsonObj)
         
-        
-#    def FromCSV(self, csvFile):
-#        logging.debug("FROMCSV")
-#        headers = self.ValidateCSVHeader(csvFile.readline())
-#        #logging.debug(headers)
-# 
-#        if headers is None: 
-#            return False
-#        
-#        while 1:
-#            line = csvFile.readline()
-#            logging.debug( line )
-#            if not line:
-#                break
-#            values = line.split(",")
-#            i = 0
-#            for val in values:
-#                if headers[i] != "ID":
-#                    print headers[i], val, type(getattr(self,headers[i]))
-#                    setAttr(getattr(self,headers[i]), val )
-#                i += 1
-#                
-#        return True
-    
-    def FromCSV(self, line):
-        #print line, '\n'
-        values = ParseCSVLine( line.strip() )
-        #print repr(values), '\n'
-        i = 0
-        for val in values:
-            if LandStreamModel.Headers[i] != "ID":
-                #print LandStreamModel.Headers[i], val, type(getattr(self,LandStreamModel.Headers[i]))
-                if not setAttr(self,LandStreamModel.Headers[i], val ):
-                    print "Line: ", line
-            i += 1
-        #print '\n'
-
-                
-def setAttr( obj, name, val ):
-    if val == "":
-        val = None
-    
-    if val == "TRUE":
-        setattr(obj, name, True)
-    elif val == "FALSE":
-        setattr(obj, name, False)
-    else:
         try:
-            setattr(obj, name, val)
+            newItem = cls( key_name=str(jsonDict['ID']) )
+            del jsonDict['ID']
+                
+            for key, value in jsonDict.items():
+                newItem.setAttr( key, value )
+            return newItem
         except:
+            print jsonObj
+            raise 
+                            
+#    def CSVHeader(self):
+#        dictionary = self.toDict()
+#        #header = 'ID'
+#        header = ''
+#        for key in dictionary:
+#            header += ',' + key 
+#        
+#        return header
+#        
+#        
+#    def ToCSV(self):
+#        dictionary = self.toDict()
+#        
+#        #csv = str(self.key().name())
+#        csv = ''
+#        for key in dictionary:
+#            csv += ','  + str(dictionary[key]) 
+#        
+#        return csv         
+    
+    @classmethod
+    def ToCsv(cls, items):
+        
+        header = cls.to_dict()
+        header['ID'] = 0
+        header = header.keys()
+        
+        stream = StringIO.StringIO()
+        
+        writer = csv.DictWriter(stream, fieldnames=header)
+        #write the header
+        writer.writerow(dict((fieldName,fieldName) for fieldName in header))
+        
+        #write all the items
+        for item in items:
+            itemDict = item.toDict()
+            itemDict['ID'] = item.key().name()
+            writer.writerow(itemDict)
+
+        return stream
+        
+        
+               
+
+                
+    def setAttr( self, name, val ):
+        
+        #first try to load the value straight...this works when loading stuff from a valid python representaiton (i.e. from deserialized JSON)
+        try:
+            setattr(self, name, val )
+        
+        #if that doesn't work, try all the special case bidness.
+        except:
+        
+            type = self.GetType(name)
+            
             try:
-                setattr(obj, name, int(val))
-            except:
-                try:
-                    setattr(obj, name, float(val))
-                except:
+                if val == "" or val == None:
+                    setattr(self,name,None)
+                    return
+                
+                if type == 'Boolean':
+                    if val == "TRUE" or val == '1':
+                        setattr(self, name, True)
+                    elif val == "FALSE" or val == '0':
+                        setattr(self, name, False)
+                 
+                elif type == 'Integer':
+                    setattr(self, name, int(val))
+                  
+                
+                elif type == 'String':              
+                    setattr(self, name, val.decode('Windows-1252'))
+                  
+                    
+                elif type == 'Float':            
+                    setattr(self, name, float(val))
+                                   
+                elif type == 'Date':
                     try:
-                        #print "date?", val.strip()
-                        temp = datetime.datetime.strptime( val, "%m/%d/%Y")
-                        d = datetime.date(temp.year, temp.month, temp.day)
-                        setattr(obj, name, d)
-                        #raise
-                    except Exception as detail:
-                        print "Error: ", sys.exc_info()[0]
-                        print "Detail: ", detail
-                        
-                        return False
-    return True
+                        temp = datetime.datetime.strptime( val, "%m/%d/%Y %H:%M:%S")
+                    except ValueError:
+                        temp = datetime.datetime.strptime( val, '%Y-%m-%d' )
+                    d = datetime.date(temp.year, temp.month, temp.day)
+                    setattr(self, name, d)
+                    return True
+                
+                           
+            except Exception as detail:
+                print 'Name: ', name
+                print 'Type: ', type
+                print "Error: ", sys.exc_info()[0]
+                print "Detail: ", detail
+                raise
+        
+            raise SetAttrError( self, name, val )
                 
                 
-                
+class SetAttrError(Exception):
+    def __init__(self, obj, name, value):
+        self.obj = obj
+        self.name = name
+        self.value = value
+    def __str__(self):
+        return "Failed to set attribute: %s with value: %s on object: %s " % (str(self.name), str(self.value), str(self.obj))                 
         
         
-                
+
             
         
         

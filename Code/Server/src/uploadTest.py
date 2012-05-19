@@ -12,6 +12,7 @@
 
 from __future__ import with_statement
 from google.appengine.api import users
+#import webapp2 as webapp
 from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import run_wsgi_app
 from google.appengine.api import files, images
@@ -19,10 +20,12 @@ from google.appengine.ext import blobstore, deferred
 from google.appengine.ext.webapp import blobstore_handlers
 from google.appengine.ext import db
 from django.utils import simplejson as json
-import re, urllib, logging, zipfile, StringIO, sys
+import logging, zipfile, StringIO, sys, datetime
 
 from models.OilGasLease import OilGasLease
+from models.DocImage import DocImage
 from models.Tract import Tract
+import dateutil.parser
 
 ##WEBSITE = 'localhost:8081/'
 #WEBSITE = 'http://wenzeltech-landstream.appspot.com/'
@@ -149,33 +152,85 @@ from models.Tract import Tract
 #        blobstore.delete(self.request.get('key') or '')
 
 
-
-class UploadHandler(webapp.RequestHandler):
-    def get(self):
-        if not users.get_current_user():
-            self.redirect(users.create_login_url("/"))
-            return
-        logging.debug("GET")
-        f = open( 'index.html' )
-        self.response.out.write( f.read() )
+class RPC:
+    def DeleteAll(self):
+        print "DELETED!"
+        db.delete(OilGasLease.all())
+        db.delete(DocImage.all())
+        db.delete(Tract.all())
+            
+        query = blobstore.BlobInfo.all()
+        blobs = query.fetch(400)
+        if len(blobs) > 0:
+            for blob in blobs:
+                blob.delete()
+                
+                
+    def LoadOGL(self, data, type):
+        if type == 'csv':
+            logging.debug('LOAD CSV FILE')
+            if data != None:
+                leases = OilGasLease.FromCSVFile(data.file)
+                for lease in leases:
+                    lease.put()
+                #from JSON
+        elif type == 'json':
+            logging.debug('LOAD JSON')
+            if data != None:
+                lease = OilGasLease.FromJSON(data)
+                if lease:
+                    lease.put()
     
-    def post(self):
-        logging.debug("POST")
-        st = self.request.get('st')
-        co = self.request.get('co')
-        yr = self.request.get('yr')
-        id = self.request.get('id')
-        og = self.request.get('og')
+    def LoadTract(self, data, request):
+        type = request.get('datatype')
+        oglID = request.get('oglID')
+        if type == 'csv':
+            logging.debug('LOAD CSV FILE')
+            if data != None:
+                tracts = Tract.FromCSVFile(data.file)
+                for tract in tracts:
+                    tract.put()
+        elif type == 'json':
+            logging.debug('LOAD JSON')
+            if data != None:
+                lease = OilGasLease.get_by_key_name( oglID )
+                if lease:   
+                    tract = Tract.FromJSON(data)
+                    tract.oilGasLease = lease
+                    if tract:
+                        print "LOADED!!!"
+                        tract.put()
+                else:
+                    raise LeaseMissingLoadError(oglID)
         
-        #if not st or not co or not yr or not id or not og:
-        #    self.
-        
-    
-        
+    def LoadImage(self, data, request):
+        oglID = request.get('oglID')
+        lease = OilGasLease.get_by_key_name( oglID )
+        if lease:                       
+            blob = files.blobstore.create( mime_type='application/pdf',
+                _blobinfo_uploaded_filename=lease.fileName,
+                        
+            )
+            with files.open(blob, 'a') as f:
+                data.value = data.file.read(65536)
+                while data.value:
+                    f.write(data.value)
+                    data.value = data.file.read(65536)
+            files.finalize(blob)
+            key = files.blobstore.get_blob_key(blob) 
+                    
+            image = DocImage( oilGasLease = lease, image=key )
+            image.put()        
+        else:
+            raise LeaseMissingLoadError(oglID)
         
 #class DownloadHandler(blobstore_handlers.BlobstoreDownloadHandler):
 class ImageDownloadHandler(webapp.RequestHandler):
     def get(self):
+        
+        if GhettoAuth(self.request) == False:
+            self.error(404)
+            
         if not users.get_current_user():
             self.redirect(users.create_login_url("/"))
             return        
@@ -183,24 +238,15 @@ class ImageDownloadHandler(webapp.RequestHandler):
         zipFile = zipfile.ZipFile( stream, 'w' )
         
         #get all the blobs in the blobstore and write them into the ZipFile
-        all = blobstore.BlobInfo.all()
+        all = DocImage.all()
         
-        filenameIndex = 0
-        for blobInfo in all:
-            logging.debug(blobInfo.filename)       
-            #zipFile.writestr( "test" + str(filenameIndex), blobstore.BlobReader(blobInfo).read() )
-            try:
-                zipFile.writestr( blobInfo.filename, blobstore.BlobReader(blobInfo).read() )
-            except Exception:
-                self.response.headers['Content-Type'] = 'text/plain'
-                self.response.out.write( blobInfo.filename)
-                return
+        DocImage.WriteToZip(all, zipFile)
 
-            filenameIndex += 1
         zipFile.close()
         
         self.response.headers['Content-Type'] ='application/zip'
         self.response.headers['Content-Disposition'] = 'attachment; filename="images.zip"'
+
         stream.seek(0)
         
         while True:
@@ -209,34 +255,45 @@ class ImageDownloadHandler(webapp.RequestHandler):
                 break
             self.response.out.write(buf)
         stream.close()
+
+def GhettoAuth(request):
+    if request.get('user') != 'oseberg' or request.get('pwd') != 'int1sci':
+        return False
+    return True   
         
 class DataDownloadHandler(webapp.RequestHandler):
-    def get(self):
-        if not users.get_current_user():
-            self.redirect(users.create_login_url("/"))
-            return        
+    def post(self):
+        
+        if GhettoAuth(self.request) == False:
+            self.error(404)
+            return
+ 
+        
+        date = dateutil.parser.parse(self.request.get('date'))
+                        
+        leases = OilGasLease.all().filter("date >", date)
         stream = StringIO.StringIO()
+        s = OilGasLease.ToCsv(leases)
         zipFile = zipfile.ZipFile( stream, 'w' )
-        
-        #get all the OilGasLeases in the datastore
-        leases = db.GqlQuery("SELECT * FROM OilGasLease")
-        lease = leases.get()
-        
-        csvData = ''
-        if lease != None:
-            header = lease.CSVHeader()
-            csvData += header
             
-            for lease in leases:
-                csvData += '\n' + lease.ToCSV()
-
-        logging.debug( csvData )     
-        zipFile.writestr( "OilGasLease.csv", csvData )
+        logging.debug(s.read())
+        zipFile.writestr( "OilGasLease.csv", s.getvalue() )
+        
+        tracts = list()
+        images = list()
+        for lease in leases:
+            tracts.extend( lease.Tracts )
+            images.extend( lease.Images )
+        
+        s = Tract.ToCsv(tracts)
+        zipFile.writestr("Tracts.csv", s.getvalue())
+        DocImage.WriteToZip(images, zipFile)
+        
         zipFile.close()
-        
+            
         self.response.headers['Content-Type'] ='application/zip'
-        self.response.headers['Content-Disposition'] = 'attachment; filename="data.zip"'
-        
+        self.response.headers['Content-Disposition'] = 'attachment; filename="LandStreamData.zip"'
+            
         stream.seek(0)
         while True:
             buf=stream.read(2048)
@@ -244,131 +301,128 @@ class DataDownloadHandler(webapp.RequestHandler):
                 break
             self.response.out.write(buf)
         stream.close()
+                
+            
+            
+            
+            
+       
+            
+class LeaseMissingLoadError(Exception):
+    def __init__(self, leaseID):
+        self.leaseID = leaseID
+    
+    def __str__(self):
+        return "Trying to load an object that depends on missing lease ID:", self.leaseID
+
+ 
+#    def get(self):
+#        if not users.get_current_user():
+#            self.redirect(users.create_login_url("/"))
+#            return        
+#        stream = StringIO.StringIO()
+#        zipFile = zipfile.ZipFile( stream, 'w' )
+#        
+#        #get all the OilGasLeases in the datastore
+#        leases = db.GqlQuery("SELECT * FROM OilGasLease")
+#        lease = leases.get()
+#        
+#        csvData = ''
+#        if lease != None:
+#            header = lease.CSVHeader()
+#            csvData += header
+#            
+#            for lease in leases:
+#                csvData += '\n' + lease.ToCSV()
+#
+#        logging.debug( csvData )     
+#        zipFile.writestr( "OilGasLease.csv", csvData )
+#        zipFile.close()
+#        
+#        self.response.headers['Content-Type'] ='application/zip'
+#        self.response.headers['Content-Disposition'] = 'attachment; filename="data.zip"'
+#        
+#        stream.seek(0)
+#        while True:
+#            buf=stream.read(2048)
+#            if buf=="": 
+#                break
+#            self.response.out.write(buf)
+#        stream.close()
+
+
+        
+                
         
 class DataUploadHandler(webapp.RequestHandler):
+    
+    def __init__(self):
+        
+        self.RPC = RPC()
+        
     def get_file_size(self, file):
         file.seek(0, 2) # Seek to the end of the file
         size = file.tell() # Get the position of EOF
         file.seek(0) # Reset the file position to the beginning
         return size
     
-    def get(self):  
-        self.response.out.write('<html><body>')
-       
-        self.response.out.write("""
-                  <form action="/upload_data" enctype="multipart/form-data" method="post">
-                    <div><label>OilGasLease:</label></div>
-                    <div><input type="file" name="OilGasLease"/></div>
-                    <div><label>Tracts:</label></div>
-                    <div><input type="file" name="Tracts"/></div>
-                    <div><label>DocImage:</label></div>
-                    <div><input type="file" name="DocImage"/></div>
-                    <div><input type="submit" value="Upload .CSV Files" /></div>
-                  </form>
-                </body>
-              </html>""")
-    
     def post(self):
         
-        
+        if GhettoAuth(self.request) == False:
+            self.error(404)
+            
+            return
+              
         data = None
         #there must be a better way??
         for name, value in self.request.POST.items():
-            print name
             if name == 'data':
-                print 'we have data'
                 data = value       
         
-        method = self.request.get('method')
-        if method == 'set_header':
-            logging.debug( dir(self.request.POST) )
-            logging.debug( self.request.get('data'))
-        elif method == 'load_csv':
-            logging.debug('LOAD CSV FILE')
-            print 'data: ', repr(data)
-            if data != None:
-                if OilGasLease.ValidateCSVHeader(OilGasLease(), data.file.readline()):
-                    print repr(OilGasLease.Headers)
-                    while 1:
-                        line = data.file.readline()
-                        if not line:
-                            break
-                        lease = OilGasLease()
-                        try:
-                            lease.FromCSV(line)
-                        except:
-                            print "Unable to create a OilGasLease from: ", line, " Error: ", sys.exc_info()[0]
-                        else:
-                            print str(lease)
-                            lease.put()
+        method = self.request.get('action')
+
+        if method == 'delete':
+            self.RPC.DeleteAll()
+            self.response.headers['Content-Type'] = 'application/json'
+            result = { 'success' : True }
+            self.response.out.write(json.dumps( result ))
+            return
+            
+        elif method == 'load':
+            
+            try:
+                if self.request.get('type') == 'ogl':
+                    self.RPC.LoadOGL(data, self.request.get('datatype'))
+                    
+                elif self.request.get('type') == 'tract':
+                    self.RPC.LoadTract(data, self.request )                
+                    
+                elif self.request.get('type') == 'image':
+                    self.RPC.LoadImage(data, self.request )
+            except Exception as detail:
+                logging.debug( "FAILED: ", detail )
+                self.response.headers['Content-Type'] = 'application/json'
+                result = { 'success' : False, 'msg' : str(detail) }
+                self.response.out.write(json.dumps( result ))
+                return
+                
+        
+        self.response.headers['Content-Type'] = 'application/json'
+        result = { 'success' : True }
+        self.response.out.write(json.dumps( result ))
+        return
+        
+            #
+            #self.response.out.write( 'oh hi!')
                 
             #print dir(data)
             #self.get_file_size( data.FieldStorage.file )
                 #logging.debug( type(value) )
             #logging.debug( 'FILE SIZE: ' + self.get_file_size(self.request.get('data').file) )
-        
-        
-#        logging.debug("DataUploadHandler.post")
-#        
-        
-#class DataUploadHandler(webapp.RequestHandler):
-#    def get_file_size(self, file):
-#        file.seek(0, 2) # Seek to the end of the file
-#        size = file.tell() # Get the position of EOF
-#        file.seek(0) # Reset the file position to the beginning
-#        return size
-#    
-#    def get(self):  
-#        self.response.out.write('<html><body>')
-#       
-#        self.response.out.write("""
-#                  <form action="/upload_data" enctype="multipart/form-data" method="post">
-#                    <div><label>OilGasLease:</label></div>
-#                    <div><input type="file" name="OilGasLease"/></div>
-#                    <div><label>Tracts:</label></div>
-#                    <div><input type="file" name="Tracts"/></div>
-#                    <div><label>DocImage:</label></div>
-#                    <div><input type="file" name="DocImage"/></div>
-#                    <div><input type="submit" value="Upload .CSV Files" /></div>
-#                  </form>
-#                </body>
-#              </html>""")    
-#        #wtf
-#    def post(self):
-#      
-##        logging.debug("DataUploadHandler.post")
-##        
-#        for name, fieldStorage in self.request.POST.items():
-#            
-##            logging.debug( repr(type(fieldStorage)) )
-#            if type(fieldStorage) is unicode:
-#                continue
-#            result = {}
-#            result['type'] = fieldStorage.type
-#            result['size'] = self.get_file_size(fieldStorage.file)
-#            
-#            if name == "OilGasLease":
-#                if OilGasLease.ValidateCSVHeader(OilGasLease(), fieldStorage.file.readline()):
-#                    print repr(OilGasLease.Headers)
-#                    while 1:
-#                        line = fieldStorage.file.readline()
-#                        if not line:
-#                            break
-#                        lease = OilGasLease()
-#                        try:
-#                            lease.FromCSV(line)
-#                        except:
-#                            print "Unable to create a OilGasLease from: ", line, " Error: ", sys.exc_info()[0]
-#                        else:
-#                            print str(lease)
-#                            lease.put()
-
 
 app = webapp.WSGIApplication(
     [
-        ('/', UploadHandler),
-        #('/([^/]+)/([^/]+)', DownloadHandler)
-        ('/download_images', ImageDownloadHandler),
+
         ('/download_data', DataDownloadHandler),
         ('/upload_data', DataUploadHandler)
     ],

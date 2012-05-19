@@ -1,4 +1,4 @@
-from models.LandStreamModel import LandStreamModel
+from models.LandStreamModel import CSVLandStreamModel
 from google.appengine.ext import db
 # The following choice lists are used for input restriction for certain properties of the OilGasLease
 # class.  At some point it may be beneficial to move these values into the datastore and use a lookup
@@ -12,7 +12,6 @@ depthClauseChoices = ['Bore hole only','Deepest formation','Deepest producing fo
 
 def FromCSV( csvFile ):
     if OilGasLease.ValidateCSVHeader(OilGasLease(), csvFile.readline()):
-        print repr(OilGasLease.Headers)
         while 1:
             line = csvFile.readline()
             if not line:
@@ -23,10 +22,9 @@ def FromCSV( csvFile ):
             except:
                 print "Unable to create a OilGasLease from: ", line, " Error: ", sys.exc_info()[0]
             else:
-                print str(lease)
                 lease.put()
     
-class OilGasLease(LandStreamModel):
+class OilGasLease(CSVLandStreamModel):
     
     # Basic lease info
     parentOGL = db.SelfReferenceProperty()
@@ -74,11 +72,20 @@ class OilGasLease(LandStreamModel):
     surfaceProvisions = db.BooleanProperty(default=False)
     otherProvisions = db.BooleanProperty(default=False) 
     
+    #lessor address
+    lessorAddress = db.StringProperty(multiline=True)
+    lessorCity    = db.StringProperty(multiline=False)
+    lessorState   = db.StringProperty(multiline=False)
+    lessorZip     = db.StringProperty(multiline=False)
+    lessorCountry = db.StringProperty(multiline=False)
+    
+    
     def __str__(self):
-        try:
-            return self.county + ', ' + self.book + '/' + self.page + ', ' + self.instrumentType
-        except:
-            return 'unset OilGasLease'
+        return self.key().name()
+        #try:
+        #    return self.county + ', ' + self.book + '/' + self.page + ', ' + self.instrumentType
+        #except:
+        #    return 'unset OilGasLease'
     
      
         
