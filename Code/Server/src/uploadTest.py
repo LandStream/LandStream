@@ -222,10 +222,7 @@ class RPC:
 #class DownloadHandler(blobstore_handlers.BlobstoreDownloadHandler):
 class ImageDownloadHandler(webapp.RequestHandler):
     def get(self):
-        
-        if GhettoAuth(self.request) == False:
-            self.error(404)
-            
+                    
         if not users.get_current_user():
             self.redirect(users.create_login_url("/"))
             return        
@@ -417,7 +414,7 @@ class DataUploadHandler(webapp.RequestHandler):
 
 app = webapp.WSGIApplication(
     [
-
+        ('/image_down', ImageDownloadHandler ),
         ('/download_data', DataDownloadHandler),
         ('/upload_data', DataUploadHandler)
     ],
