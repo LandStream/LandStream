@@ -12,7 +12,11 @@ class InvalidJSONError(Exception):
         self.cls = cls
         self.json = json
     def __str__(self):
-        return "Trying to load an object of type %s from invalid JSON: %s" % (self.cls, self.json)
+        return 'Trying to load an object of type  from invalid JSON: '
+    
+    def __repr__(self):
+        return 'Trying to load an object of type {0}s from invalid JSON: {1}s'.format( repr(self.cls), repr(self.json)) 
+        
     
      
 
@@ -179,8 +183,11 @@ class CSVLandStreamModel(LandStreamModel):
                 
     def setAttr( self, name, val ):
         
-        #first try to load the value straight...this works when loading stuff from a valid python representaiton (i.e. from deserialized JSON)
+        #first try to load the value straight...this works when loading stuff from a valid python representation (i.e. from deserialized JSON)
         try:
+            #if type(val) == type(str):
+            #    val = val.strip()
+                
             setattr(self, name, val )
         
         #if that doesn't work, try all the special case bidness.
@@ -203,8 +210,9 @@ class CSVLandStreamModel(LandStreamModel):
                     setattr(self, name, int(val))
                   
                 
-                elif type == 'String':              
-                    setattr(self, name, val.decode('Windows-1252'))
+                elif type == 'String':          
+                    val = val.decode('Windows-1252').strip()   
+                    setattr(self, name, val)
                   
                     
                 elif type == 'Float':            
@@ -227,7 +235,7 @@ class CSVLandStreamModel(LandStreamModel):
                 print "Detail: ", detail
                 raise
         
-            raise SetAttrError( self, name, val )
+            #raise SetAttrError( self, name, val )
                 
                 
 class SetAttrError(Exception):

@@ -168,14 +168,12 @@ class RPC:
                 
     def LoadOGL(self, data, type):
         if type == 'csv':
-            logging.debug('LOAD CSV FILE')
             if data != None:
                 leases = OilGasLease.FromCSVFile(data.file)
                 for lease in leases:
                     lease.put()
                 #from JSON
         elif type == 'json':
-            logging.debug('LOAD JSON')
             if data != None:
                 lease = OilGasLease.FromJSON(data)
                 if lease:
@@ -185,20 +183,17 @@ class RPC:
         type = request.get('datatype')
         oglID = request.get('oglID')
         if type == 'csv':
-            logging.debug('LOAD CSV FILE')
             if data != None:
                 tracts = Tract.FromCSVFile(data.file)
                 for tract in tracts:
                     tract.put()
         elif type == 'json':
-            logging.debug('LOAD JSON')
             if data != None:
                 lease = OilGasLease.get_by_key_name( oglID )
                 if lease:   
                     tract = Tract.FromJSON(data)
                     tract.oilGasLease = lease
                     if tract:
-                        print "LOADED!!!"
                         tract.put()
                 else:
                     raise LeaseMissingLoadError(oglID)
@@ -276,7 +271,6 @@ class DataDownloadHandler(webapp.RequestHandler):
         s = OilGasLease.ToCsv(leases)
         zipFile = zipfile.ZipFile( stream, 'w' )
             
-        logging.debug(s.read())
         zipFile.writestr( "OilGasLease.csv", s.getvalue() )
         
         tracts = list()
@@ -384,8 +378,8 @@ class DataUploadHandler(webapp.RequestHandler):
         if method == 'delete':
             self.RPC.DeleteAll()
             self.response.headers['Content-Type'] = 'application/json'
-            result = { 'success' : True }
-            self.response.out.write(json.dumps( result ))
+            result = { 'success' : True, 'msg' : '' }
+            self.response.out.write( json.dumps( result ) )
             return
             
         elif method == 'load':
@@ -400,15 +394,16 @@ class DataUploadHandler(webapp.RequestHandler):
                 elif self.request.get('type') == 'image':
                     self.RPC.LoadImage(data, self.request )
             except Exception as detail:
-                logging.debug( "FAILED: ", detail )
+                
+                logging.debug( "FAILED:" + repr(detail))
                 self.response.headers['Content-Type'] = 'application/json'
-                result = { 'success' : False, 'msg' : str(detail) }
+                result = { 'success' : False, 'msg' : repr(detail) }
                 self.response.out.write(json.dumps( result ))
                 return
                 
         
         self.response.headers['Content-Type'] = 'application/json'
-        result = { 'success' : True }
+        result = { 'success' : True, 'msg' : '' }
         self.response.out.write(json.dumps( result ))
         return
         

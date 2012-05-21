@@ -7,6 +7,7 @@ from models.LandStreamModel import CSVLandStreamModel
 # defined prior to the definition of the Tract class itself.
 
 def validateQuarter(quarter):
+        
     if (quarter == None):
         return
     allowed = ['NE', 'NW', 'SE', 'SW']
@@ -16,12 +17,22 @@ def validateQuarter(quarter):
             raise db.BadValueError('quarter must be a comma separated list of the following: {NE|NW|SE|SW}:' + s)
 
 def validateSec(sec):
-    if (sec == None):
-        return    
-    if (len(sec) != 2):    
-        raise db.BadValueError('sec must be two characters long (e.g. 02)')    
-    if (not str(sec).isdigit()):
-        raise db.BadValueError('sec must be a number')
+    
+    try:
+        val = int(sec)
+        if val < 1 or val > 36:
+            db.BadValueError('sec must be between 1-36, sec = ' + str(val) )
+    except:
+        raise db.BadValueError('sec must be a number, sec = ' + str(sec) )
+        
+    return
+    
+#    if (sec == None):
+#        return    
+#    if (len(sec) != 2):    
+#        raise db.BadValueError('sec must be two characters long (e.g. 02)')    
+#    if (not str(sec).isdigit()):
+#        raise db.BadValueError('sec must be a number')
     
 def validateTwn(twn):
     if (twn == None):
@@ -55,9 +66,13 @@ def validateRng(rng):
 
 class Tract(CSVLandStreamModel):
     oilGasLease = db.ReferenceProperty(OilGasLease, collection_name="Tracts")
-    quarter = db.StringProperty(multiline=False, validator=validateQuarter)
+    
+    #turning off validation of quarter for now
+    #quarter = db.StringProperty(multiline=False, validator=validateQuarter)
+    quarter = db.StringProperty(multiline=False)
     legal = db.StringProperty(multiline=True)
     sec = db.StringProperty(multiline=False, validator=validateSec)
+    sec = db.StringProperty(multiline=False)
     twn = db.StringProperty(multiline=False, validator=validateTwn)
     rng = db.StringProperty(multiline=False, validator=validateRng)
     county = db.StringProperty(multiline=False)
