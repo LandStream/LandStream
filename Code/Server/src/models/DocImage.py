@@ -2,7 +2,7 @@ from google.appengine.ext import db
 from models.OilGasLease import OilGasLease
 from models.LandStreamModel import LandStreamModel
 from google.appengine.ext import blobstore
-        
+import logging
 class DocImage(LandStreamModel):
     oilGasLease = db.ReferenceProperty(OilGasLease, collection_name='Images')
 
@@ -18,10 +18,6 @@ class DocImage(LandStreamModel):
         for docImage in items:
             image = docImage.image
             lease = docImage.oilGasLease                
-            path = lease.state + '/' + lease.county + '/' + str(lease.filingDate.year)  + '/'
-
-            try:
-                zipFile.writestr( path + lease.fileName, blobstore.BlobReader(image.key()).read() )
-            except Exception as detail:
-                #log this
-                pass
+            path = lease.state + '/' + lease.county + '/' + str(lease.filingDate.year)  + '/' + lease.fileName
+        
+            zipFile.writestr( path.encode('utf-8'), blobstore.BlobReader(image.key()).read() )

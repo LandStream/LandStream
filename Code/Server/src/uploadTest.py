@@ -20,11 +20,12 @@ from google.appengine.ext import blobstore, deferred
 from google.appengine.ext.webapp import blobstore_handlers
 from google.appengine.ext import db
 from django.utils import simplejson as json
-import logging, zipfile, StringIO, sys, datetime
+import logging, zipfile, zlib, StringIO, sys, datetime
 
-from models.OilGasLease import OilGasLease
+from models.OilGasLease import OilGasLease, CreateZipFile
 from models.DocImage import DocImage
 from models.Tract import Tract
+from models.ZipFileModel import ZipFileModel
 import dateutil.parser
 
 ##WEBSITE = 'localhost:8081/'
@@ -218,86 +219,136 @@ class RPC:
             image.put()        
         else:
             raise LeaseMissingLoadError(oglID)
-        
-#class DownloadHandler(blobstore_handlers.BlobstoreDownloadHandler):
-class ImageDownloadHandler(webapp.RequestHandler):
+   
+class RootHandler(webapp.RequestHandler):
     def get(self):
-                    
-        if not users.get_current_user():
-            self.redirect(users.create_login_url("/"))
-            return        
-        stream = StringIO.StringIO()
-        zipFile = zipfile.ZipFile( stream, 'w' )
-        
-        #get all the blobs in the blobstore and write them into the ZipFile
-        all = DocImage.all()
-        
-        DocImage.WriteToZip(all, zipFile)
-
-        zipFile.close()
-        
-        self.response.headers['Content-Type'] ='application/zip'
-        self.response.headers['Content-Disposition'] = 'attachment; filename="images.zip"'
-
-        stream.seek(0)
-        
-        while True:
-            buf=stream.read(2048)
-            if buf=="": 
-                break
-            self.response.out.write(buf)
-        stream.close()
-
+        self.response.out.write("HELLO WORLD!")
+         
+#
 def GhettoAuth(request):
-    if request.get('user') != 'oseberg' or request.get('pwd') != 'int1sci':
+    if request.get('user') != 'oseberg' or request.get('pwd') != 'int11sci':
         return False
     return True   
-        
-class DataDownloadHandler(webapp.RequestHandler):
+
+
+
+class DataDownloadHandler(blobstore_handlers.BlobstoreDownloadHandler):
     def post(self):
         
         if GhettoAuth(self.request) == False:
             self.error(404)
             return
- 
+         
+        try:
+            dateParam = self.request.get('date')
+            logging.debug(dateParam)
+            date = None
+            if dateParam:
+                date = dateutil.parser.parse(dateParam)
+                     
+        except Exception, detail:
+            self.response.headers['Content-Type'] ='application/json'
+            result = { 'success' : False, 'msg' : repr(detail) }
+            self.response.out.write(json.dumps( result ))
+            return
+    
+
+class ImageDownloadHandler(blobstore_handlers.BlobstoreDownloadHandler):
+    
+    def post(self):
         
-        date = dateutil.parser.parse(self.request.get('date'))
-                        
-        leases = OilGasLease.all().filter("date >", date)
-        stream = StringIO.StringIO()
-        s = OilGasLease.ToCsv(leases)
-        zipFile = zipfile.ZipFile( stream, 'w' )
+        if GhettoAuth(self.request) == False:
+            self.error(404)
+            return
+        
+        oglID = self.request.get('id')
+        if not oglID:
+            result = { 'success' : False, 'msg' : 'must supply "id"' }
+            self.response.headers['Content-Type'] = 'application/json'
+            self.response.out.write( json.dumps( result ) )
+            return
             
-        zipFile.writestr( "OilGasLease.csv", s.getvalue() )
-        
-        tracts = list()
-        images = list()
-        for lease in leases:
-            tracts.extend( lease.Tracts )
-            images.extend( lease.Images )
-        
-        s = Tract.ToCsv(tracts)
-        zipFile.writestr("Tracts.csv", s.getvalue())
-        DocImage.WriteToZip(images, zipFile)
-        
-        zipFile.close()
+        lease = OilGasLease.get_by_key_name( self.request.get('id') )
+        if not lease:
+            result = { 'success' : False, 'msg' : 'no OilGasLease with supplied id: ' + oglID }
+            self.response.headers['Content-Type'] = 'application/json'
+            self.response.out.write( json.dumps( result ) )
+            return
             
-        self.response.headers['Content-Type'] ='application/zip'
-        self.response.headers['Content-Disposition'] = 'attachment; filename="LandStreamData.zip"'
+        for image in lease.Images:
+            if image.image:
+                self.send_blob(image.image, content_type='application/pdf' )
+        
+    
+
+class DownloadZipHandler(blobstore_handlers.BlobstoreDownloadHandler):
+    def post(self):
+        if GhettoAuth(self.request) == False:
+            self.error(404)
+            return
+        
+        zipFileModel = ZipFileModel.get( db.Key(self.request.get('key')) )
+        
+        
+        if not zipFileModel:
+            result = { 'success' : False, 'exception' : 'InvalidFileKeyError', 'msg' : 'Requested file does not exist!' }
+            self.response.headers['Content-Type'] = 'application/json'
+            self.response.out.write( json.dumps( result ) )
+            return
             
-        stream.seek(0)
-        while True:
-            buf=stream.read(2048)
-            if buf=="": 
-                break
-            self.response.out.write(buf)
-        stream.close()
+        if not zipFileModel.blob:
+            
+            result = { 'success' : False, 'status' : zipFileModel.status, 'msg' : '' }
+            self.response.headers['Content-Type'] = 'application/json'
+            self.response.out.write( json.dumps( result ) )
+            return
+        
+        else:
+            self.response.headers['Content-Disposition'] = 'attachment; filename="LandStreamData.zip"'
+            self.send_blob(zipFileModel.blob)
                 
-            
-            
-            
-            
-       
+            return
+        
+        result = { 'success' : False, 'msg' : 'Unkown failure' }
+        self.response.headers['Content-Type'] = 'application/json'
+        self.response.out.write( json.dumps( result ) )
+        return
+        
+
+    
+class CreateZipHandler(webapp.RequestHandler):
+    
+    def post(self):
+        
+        if GhettoAuth(self.request) == False:
+            self.error(404)
+            return
+         
+        try:
+            dateParam = self.request.get('date')
+            logging.debug(dateParam)
+            date = None
+            if dateParam:
+                date = dateutil.parser.parse(dateParam)
+                     
+            zipFileModel = ZipFileModel()
+            zipFileModel.status = 'started'
+            zipFileModel.put()
+ 
+            deferred.defer( CreateZipFile, date, str(zipFileModel.key()) )
+         
+            #self.response.out.write("started deferred task")
+            self.response.headers['Content-Type'] ='application/json'
+            result = { 'success' : True, 'msg' : '', 'key' : str(zipFileModel.key()) }
+            self.response.out.write(json.dumps( result ))
+            return
+        
+        except Exception, detail:
+            self.response.headers['Content-Type'] ='application/json'
+            result = { 'success' : False, 'msg' : repr(detail) }
+            self.response.out.write(json.dumps( result ))
+            return
+        
             
 class LeaseMissingLoadError(Exception):
     def __init__(self, leaseID):
@@ -306,45 +357,7 @@ class LeaseMissingLoadError(Exception):
     def __str__(self):
         return "Trying to load an object that depends on missing lease ID:", self.leaseID
 
- 
-#    def get(self):
-#        if not users.get_current_user():
-#            self.redirect(users.create_login_url("/"))
-#            return        
-#        stream = StringIO.StringIO()
-#        zipFile = zipfile.ZipFile( stream, 'w' )
-#        
-#        #get all the OilGasLeases in the datastore
-#        leases = db.GqlQuery("SELECT * FROM OilGasLease")
-#        lease = leases.get()
-#        
-#        csvData = ''
-#        if lease != None:
-#            header = lease.CSVHeader()
-#            csvData += header
-#            
-#            for lease in leases:
-#                csvData += '\n' + lease.ToCSV()
-#
-#        logging.debug( csvData )     
-#        zipFile.writestr( "OilGasLease.csv", csvData )
-#        zipFile.close()
-#        
-#        self.response.headers['Content-Type'] ='application/zip'
-#        self.response.headers['Content-Disposition'] = 'attachment; filename="data.zip"'
-#        
-#        stream.seek(0)
-#        while True:
-#            buf=stream.read(2048)
-#            if buf=="": 
-#                break
-#            self.response.out.write(buf)
-#        stream.close()
 
-
-        
-                
-        
 class DataUploadHandler(webapp.RequestHandler):
     
     def __init__(self):
@@ -390,7 +403,7 @@ class DataUploadHandler(webapp.RequestHandler):
                     
                 elif self.request.get('type') == 'image':
                     self.RPC.LoadImage(data, self.request )
-            except Exception as detail:
+            except Exception, detail:
                 
                 logging.debug( "FAILED:" + repr(detail))
                 self.response.headers['Content-Type'] = 'application/json'
@@ -404,18 +417,15 @@ class DataUploadHandler(webapp.RequestHandler):
         self.response.out.write(json.dumps( result ))
         return
         
-            #
-            #self.response.out.write( 'oh hi!')
-                
-            #print dir(data)
-            #self.get_file_size( data.FieldStorage.file )
-                #logging.debug( type(value) )
-            #logging.debug( 'FILE SIZE: ' + self.get_file_size(self.request.get('data').file) )
-
+         
 app = webapp.WSGIApplication(
     [
-        ('/image_down', ImageDownloadHandler ),
-        ('/download_data', DataDownloadHandler),
+        ('/', RootHandler ),
+        #('/image_down', ImageDownloadHandler ),
+        ('/create_zip', CreateZipHandler ),
+        ('/get_zip', DownloadZipHandler ),
+        ('/image', ImageDownloadHandler),
+        ('/data', DataDownloadHandler),
         ('/upload_data', DataUploadHandler)
     ],
     debug=True

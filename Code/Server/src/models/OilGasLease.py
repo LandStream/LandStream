@@ -1,3 +1,4 @@
+from __future__ import with_statement
 from models.LandStreamModel import CSVLandStreamModel
 from google.appengine.ext import db
 # The following choice lists are used for input restriction for certain properties of the OilGasLease
@@ -86,6 +87,120 @@ class OilGasLease(CSVLandStreamModel):
         #    return self.county + ', ' + self.book + '/' + self.page + ', ' + self.instrumentType
         #except:
         #    return 'unset OilGasLease'
+
+from models.DocImage import DocImage
+from models.Tract import Tract
+from models.ZipFileModel import ZipFileModel
+from google.appengine.ext import blobstore
+from google.appengine.api import files
+
+import zipfile, zlib, StringIO
+
+
+
+#def 
+
+def WriteTempImageFile( stream ):
+    blob = files.blobstore.create( _blobinfo_uploaded_filename='ImageTemp' )
+    with files.open(blob, 'a') as f:
+        f.write(stream.getvalue())
+                
+    files.finalize(blob)
+    return files.blobstore.get_blob_key(blob) 
     
-     
+
+def StitchTempFiles( zipFileModel, blobKeys ):
+    
+    
+    blob = files.blobstore.create( mime_type='application/zip', _blobinfo_uploaded_filename='LandStreamData.zip')
+        
+    
+    with files.open(blob, 'a') as f:
+        for blobKey in blobKeys: 
+            key = blobstore.BlobKey(blobKey)
+            
+            tempZipFile = zipfile.ZipFile(  )
+            
+            f.write()
+            blobstore.BlobInfo(key ).delete()
+                
+    files.finalize(blob)
+    zipFileModel.blob = files.blobstore.get_blob_key(blob) 
+    
+    
+    
+    
+def CreateZipFile( date, zipFileKey ):
+                        
+    #leases = OilGasLease.all().filter("date >", date)
+    try:
+        zipFileModel = ZipFileModel.get( db.Key(zipFileKey) )
+        zipFileModel.status = 'running'
+        zipFileModel.put()
+        
+        stream = StringIO.StringIO() 
+        zipFile = zipfile.ZipFile( stream, 'w', compression=zipfile.ZIP_DEFLATED )
+        
+        leases = OilGasLease.all()
+        
+        if date:
+            leases = leases.filter('date >', date)
+    
+        s = OilGasLease.ToCsv(leases)
+        zipFile.writestr( "OilGasLease.csv", s.getvalue() )
+       
+        tracts = list()
+        tempFiles = list()
+        count = 0
+        try:
+            for lease in leases:
+                tracts.extend( lease.Tracts )
+                if count % 100 == 0:
+                    zipFileModel.status = str(count)
+                    zipFileModel.put()    
+                count += 1
+                
+        except db.Timeout:
+            leases = OilGasLease.all()
+            if date:
+                leases = leases.filter('date >', date)
+                
+            for lease in leases.run( offset=count ):
+                tracts.extend( lease.Tracts )
+                if csvOnly == False:
+                    DocImage.WriteToZip(lease.Images, zipFile)
+                
+                if count % 100 == 0:
+                    zipFileModel.status = str(count)
+                    zipFileModel.put()
+                count += 1
+                
+
+        zipFileModel.status = 'writing Tract data to zipfile'
+        zipFileModel.put()
+        s = Tract.ToCsv(tracts)
+        zipFile.writestr( "Tracts.csv", s.getvalue())
+        zipFile.close()
+        
+        blob = files.blobstore.create( mime_type='application/zip', _blobinfo_uploaded_filename='LandStreamData.zip')
+        
+        zipFileModel.status = 'writing zip file to blobstore'
+        zipFileModel.put()
+        with files.open(blob, 'a') as f:
+            stream.seek(0)
+            while True:
+                buf=stream.read(2048)
+                if buf=="": 
+                    break
+                f.write(buf)
+                
+        files.finalize(blob)
+        zipFileModel.blob = files.blobstore.get_blob_key(blob) 
+        zipFileModel.status = 'done'
+        zipFileModel.put()
+    except Exception, detail:
+        zipFileModel.status = repr(detail)
+        zipFileModel.put()
+        
+            
         

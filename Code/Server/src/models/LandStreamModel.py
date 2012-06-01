@@ -3,6 +3,10 @@ from google.appengine.ext import db
 import logging, re, datetime, sys, csv, StringIO
 from django.utils import simplejson as json
 
+
+
+
+    
 class InvalidCSVFileError(Exception):       
     def __str__(self):
         return "CSV file header is invalid"
@@ -18,12 +22,24 @@ class InvalidJSONError(Exception):
         return 'Trying to load an object of type {0}s from invalid JSON: {1}s'.format( repr(self.cls), repr(self.json)) 
         
     
-     
+
+    
 
 class LandStreamModel(db.Model):
     
     date  = db.DateTimeProperty(auto_now_add=True)
     
+    @classmethod
+    def Count(cls):
+        count = 0
+        query = cls.all()
+        batchCount = query.count()
+        while batchCount > 0:
+            count += batchCount
+            batchCount = query.with_cursor(query.cursor()).count()
+        
+        return count
+
     @classmethod
     def to_dict(cls):
         return dict([(p, unicode(getattr(cls, p))) for p in cls.properties()])
@@ -110,8 +126,9 @@ class CSVLandStreamModel(LandStreamModel):
         return items           
     
     def toDict(self):
-        return dict([(p, unicode(getattr(self, p))) for p in self.properties()])
+        return dict([(p, unicode(getattr(self, p)).encode('utf-8')) for p in self.properties()])
     
+        #return dict([(p, unicode(getattr(self, p))) for p in self.properties()])
     
     @classmethod
     def FromJSON(cls, jsonObj):
@@ -135,27 +152,8 @@ class CSVLandStreamModel(LandStreamModel):
         except:
             print jsonObj
             raise 
-                            
-#    def CSVHeader(self):
-#        dictionary = self.toDict()
-#        #header = 'ID'
-#        header = ''
-#        for key in dictionary:
-#            header += ',' + key 
-#        
-#        return header
-#        
-#        
-#    def ToCSV(self):
-#        dictionary = self.toDict()
-#        
-#        #csv = str(self.key().name())
-#        csv = ''
-#        for key in dictionary:
-#            csv += ','  + str(dictionary[key]) 
-#        
-#        return csv         
-    
+                
+
     @classmethod
     def ToCsv(cls, items):
         
@@ -177,8 +175,28 @@ class CSVLandStreamModel(LandStreamModel):
 
         return stream
         
+    @classmethod
+    def CSVHeader(cls, stream):
+        header = cls.to_dict()
+        header['ID'] = 0
+        header = header.keys()
+                
+        writer = csv.DictWriter(stream, fieldnames=header)
+  
+        #write the header
+        writer.writerow(dict((fieldName,fieldName) for fieldName in header))  
         
-               
+        return writer     
+        
+        
+    
+    def toCSV(self, writer):
+        
+        itemDict = self.toDict()
+        itemDict['ID'] = self.key().name()
+        writer.writerow(itemDict)
+        
+        
 
                 
     def setAttr( self, name, val ):
@@ -228,7 +246,7 @@ class CSVLandStreamModel(LandStreamModel):
                     return True
                 
                            
-            except Exception as detail:
+            except Exception , detail:
                 print 'Name: ', name
                 print 'Type: ', type
                 print "Error: ", sys.exc_info()[0]
@@ -248,7 +266,5 @@ class SetAttrError(Exception):
         
         
 
-            
-        
         
         
